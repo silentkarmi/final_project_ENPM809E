@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-
-
 # python
 import sys
 import copy
@@ -144,11 +141,47 @@ class Manipulation(object):
 
         moveit_group = mc.MoveGroupCommander(
             'kitting_arm', robot_description=ns + '/' + robot_description, ns=ns)
+        
+        
+        rospy.sleep(2)
+        
+        len = 0.6
+        width = 0.6
+        height = 0.68
+        
         self.groups = {}
         self.groups['kitting_arm'] = moveit_group
         self._arm_group = self.groups['kitting_arm']
-        self._arm_group.set_goal_orientation_tolerance = 0.001
-        self._arm_group.set_goal_position_tolerance = 0.001
+        # self._arm_group.set_goal_orientation_tolerance = 0.1
+        # self._arm_group.set_goal_position_tolerance = 0.1
+        
+        # p = geometry_msgs.msg.PoseStamped()
+        # p.header.frame_id = self.robot.get_planning_frame()
+        # p.pose.position.x = 0
+        # p.pose.position.y = 0
+        # p.pose.position.z = height / 2
+        # self.scene.add_box("bin1", p, (len, width, height))
+
+        # p = geometry_msgs.msg.PoseStamped()
+        # p.header.frame_id = self.robot.get_planning_frame()
+        # p.pose.position.x = -1
+        # p.pose.position.y = 0
+        # p.pose.position.z = height / 2
+        # self.scene.add_box("bin2", p, (len, width, height))
+        
+        # p = geometry_msgs.msg.PoseStamped()
+        # p.header.frame_id = self.robot.get_planning_frame()
+        # p.pose.position.x = -2
+        # p.pose.position.y = 0
+        # p.pose.position.z = height / 2
+        # self.scene.add_box("bin3", p, (len, width, height))
+        
+        # p = geometry_msgs.msg.PoseStamped()
+        # p.header.frame_id = self.robot.get_planning_frame()
+        # p.pose.position.x = -3
+        # p.pose.position.y = 0
+        # p.pose.position.z = height / 2
+        # self.scene.add_box("bin4", p, (len, width, height))
 
         # rospy.logerr(self.groups['kitting_arm'].get_current_pose())
         # ee_link
@@ -170,7 +203,6 @@ class Manipulation(object):
         """
 
         msg = rospy.wait_for_message("/part_info", PartInfos)
-        # Manipulation.print_msg(msg)
         self.get_orders(msg)
         self.get_parts_in_workcell()
         
@@ -178,7 +210,18 @@ class Manipulation(object):
             rospy.sleep(1)
             part = self.find_part(order.color)
             self.move_part(part.pose, order.pose)
-       
+            
+        # self.pickandplace()
+        # self.go_home()
+    
+
+    def execute_move(self):
+        self._arm_group.go(wait=True)
+        self._arm_group.stop()
+        # It is always good to clear your targets after planning with poses.
+        # Note: there is no equivalent function for clear_joint_value_targets()
+        self._arm_group.clear_pose_targets()
+
     def find_part(self, part_color):
         for part in self.parts_in_workcell:
             if part.color == part_color:
@@ -330,8 +373,20 @@ class Manipulation(object):
 
         Args:
             x (float): x position in the world frame
+            
         """
+        
+        # kitting_arm
+        # - linear_arm_actuator_joint
+        # - shoulder_pan_joint
+        # - shoulder_lift_joint
+        # - elbow_joint
+        # - wrist_1_joint
+        # - wrist_2_joint
+        # - wrist_3_joint
+
         x = -1.5 - x
+        # arm_joints = [x, 0, -0.75, 2.12, -3.04, -1.51, 0]
         arm_joints = [x, 0, -1.25, 1.74, -2.66, -1.51, 0]
         self._arm_group.go(arm_joints, wait=True)
 
@@ -363,75 +418,6 @@ class Manipulation(object):
         rospy.sleep(3.0)
         self.move_arm_base(-3)
 
-    def pick_up_custom_part(self, pickup_pose):
-        """
-        Pick up a part given its pose
-
-        Args:
-            pickup_pose (geometry_msgs.Pose): Pose of the part in the 
-            world frame
-        """
-
-        # First: get the arm closer to the part
-        # self.move_arm_base(pickup_pose.position.x)
-
-        # This configuration keeps the gripper flat (facing down)
-        # flat_orientation = quaternion_from_euler(0, 1.57, 0)
-        # flat_gripper = Pose().orientation
-        # flat_gripper.x = flat_orientation[0]
-        # flat_gripper.y = flat_orientation[1]
-        # flat_gripper.z = flat_orientation[2]
-        # flat_gripper.w = flat_orientation[3]
-        
-        flat_gripper = Pose().orientation
-        flat_gripper.x = -0.5
-        flat_gripper.y = 0.5
-        flat_gripper.z = 0.5
-        flat_gripper.w = 0.5
-
-        # position to reach = position of the part
-        gripper_position = Pose().position
-        gripper_position.x = pickup_pose.position.x
-        gripper_position.y = pickup_pose.position.y
-        gripper_position.z = pickup_pose.position.z + 0.30
-
-        # combine position + orientation
-        above_part_pose = Pose()
-        above_part_pose.position = gripper_position
-        above_part_pose.orientation = flat_gripper
-        
-        Manipulation.print_msg("Activate Gripper...")
-        # activate gripper
-        self.activate_gripper()
-
-        Manipulation.print_msg("Reach the above part...")
-        # input()
-        # send the gripper to the pose using moveit
-        self._arm_group.set_pose_target(above_part_pose)
-        self._arm_group.go()
-        while not self.is_object_attached():
-            rospy.sleep(2)
-
-        
-
-        # Manipulation.print_msg("Slowly Pickup Part...")
-        # input()
-        # # slowly move down until the part is attached to the gripper
-        # part_is_attached = self.is_object_attached()
-        # while not part_is_attached:
-        #     pickup_pose = copy.deepcopy(self._arm_group.get_current_pose())
-        #     pickup_pose.pose.position.z -= 0.001
-        #     self._arm_group.set_pose_target(pickup_pose)
-        #     self._arm_group.go()
-        #     part_is_attached = self.is_object_attached()
-            # rospy.sleep(0.2)
-        input()
-        lift_arm_pose = above_part_pose
-        lift_arm_pose.position.z += 0.30
-        Manipulation.print_msg("Lift the arm back...")
-        # once the part is attached, lift the gripper
-        self._arm_group.set_pose_target(above_part_pose)
-        self._arm_group.go()
 
     def pick_up_part(self, pickup_pose):
         """
@@ -464,8 +450,10 @@ class Manipulation(object):
         above_part_pose.orientation = flat_gripper
 
         # send the gripper to the pose using moveit
-        self._arm_group.set_pose_target(above_part_pose)
-        self._arm_group.go()
+        # self._arm_group.set_pose_target(above_part_pose)
+        # self.execute_move()
+
+        self.cartesian_move([above_part_pose])
 
         # activate gripper
         self.activate_gripper()
@@ -473,16 +461,18 @@ class Manipulation(object):
         # slowly move down until the part is attached to the gripper
         part_is_attached = self.is_object_attached()
         while not part_is_attached:
+            rospy.sleep(0.3)
             pickup_pose = copy.deepcopy(self._arm_group.get_current_pose())
             pickup_pose.pose.position.z -= 0.001
-            self._arm_group.set_pose_target(pickup_pose)
-            self._arm_group.go()
+            # self._arm_group.set_pose_target(pickup_pose)
+            plan, _ = self._arm_group.compute_cartesian_path(
+                [pickup_pose.pose], 0.001, 0.0)
+            self._arm_group.execute(plan, wait=True)
             part_is_attached = self.is_object_attached()
-            # rospy.sleep(0.2)
+            
 
         # once the part is attached, lift the gripper
-        self._arm_group.set_pose_target(above_part_pose)
-        self._arm_group.go()
+        self.cartesian_move([above_part_pose])
         
     def place_part(self, place_pose):
         """
@@ -513,15 +503,16 @@ class Manipulation(object):
         above_bin_pose = Pose()
         above_bin_pose.position = gripper_position
         above_bin_pose.orientation = flat_gripper
-        self._arm_group.set_pose_target(above_bin_pose)
-        self._arm_group.go()
+        # self._arm_group.set_pose_target(above_bin_pose)
+        # self._arm_group.go()
+        self.cartesian_move([above_bin_pose])
 
         # get the pose of the gripper and make it move a bit lower
         # before releasing the part
         current_arm_pose = copy.deepcopy(self._arm_group.get_current_pose())
         current_arm_pose.pose.position.z -= 0.02
-        self._arm_group.set_pose_target(current_arm_pose)
-        self._arm_group.go()
+        
+        self.cartesian_move([current_arm_pose.pose])
 
         # deactivate gripper
         self.deactivate_gripper()
@@ -552,7 +543,7 @@ class Manipulation(object):
         Manipulation.print_partition()
         # input()
         self.pick_up_part(pickup_pose)
-        # self.place_part(place_pose)
+        self.place_part(place_pose)
 
         return True
 
