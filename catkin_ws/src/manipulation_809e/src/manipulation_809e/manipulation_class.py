@@ -6,13 +6,98 @@ import sys
 import copy
 # ros
 import rospy
+from tf.transformations import euler_from_quaternion, quaternion_from_euler
+import tf2_ros
+import tf2_msgs.msg 
+import geometry_msgs.msg 
 from geometry_msgs.msg import Pose
 from enpm809e_msgs.srv import VacuumGripperControl
-from enpm809e_msgs.msg import VacuumGripperState
+from enpm809e_msgs.msg import VacuumGripperState, LogicalCameraImage, PartInfos
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
+
+
 
 # moveit
 import moveit_commander as mc
+
+class Part:
+    """part in the workcell is stored in world frame
+    """
+    def __init__(self, color, pose):
+        self.color = color
+        self.pose = pose
+        
+        Manipulation.print_partition()
+        rospy.loginfo(self.color)
+        rospy.loginfo(self.pose)
+        Manipulation.print_partition()
+        
+class Order:
+    """order for the kitting arm to complete
+    """
+   
+    def __init__(self, product):
+        self.color = product.color
+        self.bin = product.bin
+        
+        trans = TF_TRANSFORM.get_world_transform_for_order(product)
+        self.pose = Pose()
+        self.pose.position.x = trans.translation.x
+        self.pose.position.y = trans.translation.y
+        self.pose.position.z = trans.translation.z
+        
+        self.pose.orientation = trans.rotation
+        
+        Manipulation.print_partition()
+        rospy.loginfo(self.color)
+        rospy.loginfo(self.pose)
+        Manipulation.print_partition()
+        
+class TF_TRANSFORM:
+    """
+    summary:
+    The is a Static class for initializing the tf transforms
+    """
+    tfBuffer = None
+    listener = None
+
+    @staticmethod
+    def initialize()-> None:
+        """initializes tf Buffer
+        """
+        TF_TRANSFORM.tfBuffer = tf2_ros.Buffer()
+        TF_TRANSFORM.listener = tf2_ros.TransformListener(TF_TRANSFORM.tfBuffer)
+        
+    def get_world_transform_for_order(product):
+        pub_tf = rospy.Publisher("/tf", tf2_msgs.msg.TFMessage, queue_size=1) 
+        
+        for i in range(3):
+            rospy.sleep(0.1)
+            t = geometry_msgs.msg.TransformStamped()
+            t.header.frame_id = product.bin
+            t.header.stamp = rospy.Time.now()
+            t.child_frame_id = "part_to_place"
+            t.transform.translation.x = product.pose_in_bin.position.x
+            t.transform.translation.y = product.pose_in_bin.position.y
+            t.transform.translation.z = product.pose_in_bin.position.z
+
+            t.transform.rotation.x = 0.0
+            t.transform.rotation.y = 0.0 
+            t.transform.rotation.z = 0.0 
+            t.transform.rotation.w = 1.0
+
+            tfm = tf2_msgs.msg.TFMessage([t])
+            pub_tf.publish(tfm)
+            
+            rospy.sleep(1)
+        
+        
+        trans = TF_TRANSFORM.tfBuffer.lookup_transform('world',
+                                                       t.child_frame_id,
+                                                       rospy.Time.now() - rospy.Time(3),
+                                                       rospy.Duration(2.0))
+        
+        return trans.transform    
 
 
 class Manipulation(object):
@@ -28,9 +113,11 @@ class Manipulation(object):
         mc.roscpp_initialize(sys.argv)
         rospy.init_node(node_name, anonymous=True)
         
-        rospy.loginfo("="*21)
-        rospy.loginfo("Manipulation Node for kitting arm activated...")
-        rospy.loginfo("="*21)
+        Manipulation.print_msg("Manipulation Node for kitting arm activated...")
+        TF_TRANSFORM.initialize()
+        
+        self.parts_in_workcell = []
+        self.orders = []
 
         # kitting_arm
         # - linear_arm_actuator_joint
@@ -66,26 +153,97 @@ class Manipulation(object):
         # rospy.logerr(self.groups['kitting_arm'].get_current_pose())
         # ee_link
         # rospy.logerr(self.groups['kitting_arm'].get_end_effector_link())
-
+    
+    @staticmethod
+    def print_msg(msg):
+        Manipulation.print_partition()
+        rospy.loginfo(msg)
+        Manipulation.print_partition()
+        
+    @staticmethod
+    def print_partition():
+        rospy.loginfo("="*21)
+        
     def main(self):
         """
         Main function to start the Node core
         """
 
-        #
+        msg = rospy.wait_for_message("/part_info", PartInfos)
+        # Manipulation.print_msg(msg)
+        self.get_orders(msg)
+        self.get_parts_in_workcell()
+        
+        for order in self.orders:
+            rospy.sleep(1)
+            part = self.find_part(order.color)
+            self.move_part(part.pose, order.pose)
+       
+    def find_part(self, part_color):
+        for part in self.parts_in_workcell:
+            if part.color == part_color:
+                break
+            
+        return part
+        
+    def get_parts_in_workcell(self):
+        self.parts_in_workcell = []
+        red_id = 0
+        green_id = 0
+        blue_id = 0
+        
+        def get_parts_in_camera(camera_id):
+            nonlocal red_id
+            nonlocal green_id
+            nonlocal blue_id
+            camera = "logical_camera" + "_" + str(camera_id)
+            msg_camera_1 = rospy.wait_for_message("/logical_camera/" + camera, LogicalCameraImage)
+            
+            id = 0
+            for part in msg_camera_1.models: 
+                color = str(part.type).split("_")[2]
+                if color == "red":
+                    id = red_id
+                    red_id += 1
+                elif color == "blue":
+                    id = blue_id
+                    blue_id += 1
+                elif color == "green":
+                    id = green_id
+                    green_id += 1
+                    
+                part_name = camera + "_" + part.type + "_" + str(id) + "_" + "frame"
+                    
+                rospy.sleep(1)
+                
+                t = TF_TRANSFORM.tfBuffer.lookup_transform('world',
+                                                        part_name,
+                                                        rospy.Time.now(),
+                                                        rospy.Duration(2.0))
+                pose = Pose()
+                pose.position.x = t.transform.translation.x
+                pose.position.y = t.transform.translation.y
+                pose.position.z = t.transform.translation.z
+                
+                pose.orientation = t.transform.rotation
+                
+                self.parts_in_workcell.append((Part(color, pose)))
+        
+        get_parts_in_camera(1)
+        get_parts_in_camera(2)
 
-        # forward kinematics through joint values publisher
-        # self.publish_joint_values()
+    def get_orders(self, msg):
+        """process order received from manipulation node
 
-        # forward kinematics with MoveIt
-        self.goto_preset_location("test")
-
-        # inverse kinematics with MoveIt
-        # self.reach_goal()
-
-        # pick-and-place
-        # self.pickandplace()
-
+        Args:
+            msg (PartInfos): PartInfos message type
+        """
+        rospy.loginfo("Part Info received in manipulation node")
+        
+        for product in msg.part_infos:
+            self.orders.append(Order(product))
+        
+        
     def reach_goal(self):
         """
         Give a goal to the end effector to reach
@@ -205,6 +363,76 @@ class Manipulation(object):
         rospy.sleep(3.0)
         self.move_arm_base(-3)
 
+    def pick_up_custom_part(self, pickup_pose):
+        """
+        Pick up a part given its pose
+
+        Args:
+            pickup_pose (geometry_msgs.Pose): Pose of the part in the 
+            world frame
+        """
+
+        # First: get the arm closer to the part
+        # self.move_arm_base(pickup_pose.position.x)
+
+        # This configuration keeps the gripper flat (facing down)
+        # flat_orientation = quaternion_from_euler(0, 1.57, 0)
+        # flat_gripper = Pose().orientation
+        # flat_gripper.x = flat_orientation[0]
+        # flat_gripper.y = flat_orientation[1]
+        # flat_gripper.z = flat_orientation[2]
+        # flat_gripper.w = flat_orientation[3]
+        
+        flat_gripper = Pose().orientation
+        flat_gripper.x = -0.5
+        flat_gripper.y = 0.5
+        flat_gripper.z = 0.5
+        flat_gripper.w = 0.5
+
+        # position to reach = position of the part
+        gripper_position = Pose().position
+        gripper_position.x = pickup_pose.position.x
+        gripper_position.y = pickup_pose.position.y
+        gripper_position.z = pickup_pose.position.z + 0.30
+
+        # combine position + orientation
+        above_part_pose = Pose()
+        above_part_pose.position = gripper_position
+        above_part_pose.orientation = flat_gripper
+        
+        Manipulation.print_msg("Activate Gripper...")
+        # activate gripper
+        self.activate_gripper()
+
+        Manipulation.print_msg("Reach the above part...")
+        # input()
+        # send the gripper to the pose using moveit
+        self._arm_group.set_pose_target(above_part_pose)
+        self._arm_group.go()
+        while not self.is_object_attached():
+            rospy.sleep(2)
+
+        
+
+        # Manipulation.print_msg("Slowly Pickup Part...")
+        # input()
+        # # slowly move down until the part is attached to the gripper
+        # part_is_attached = self.is_object_attached()
+        # while not part_is_attached:
+        #     pickup_pose = copy.deepcopy(self._arm_group.get_current_pose())
+        #     pickup_pose.pose.position.z -= 0.001
+        #     self._arm_group.set_pose_target(pickup_pose)
+        #     self._arm_group.go()
+        #     part_is_attached = self.is_object_attached()
+            # rospy.sleep(0.2)
+        input()
+        lift_arm_pose = above_part_pose
+        lift_arm_pose.position.z += 0.30
+        Manipulation.print_msg("Lift the arm back...")
+        # once the part is attached, lift the gripper
+        self._arm_group.set_pose_target(above_part_pose)
+        self._arm_group.go()
+
     def pick_up_part(self, pickup_pose):
         """
         Pick up a part given its pose
@@ -255,7 +483,7 @@ class Manipulation(object):
         # once the part is attached, lift the gripper
         self._arm_group.set_pose_target(above_part_pose)
         self._arm_group.go()
-
+        
     def place_part(self, place_pose):
         """
         Place a part to the given pose
@@ -317,9 +545,14 @@ class Manipulation(object):
         Returns:
             bool: True
         """
-
+        Manipulation.print_partition()
+        rospy.loginfo("move_part parameters")
+        rospy.loginfo(pickup_pose)
+        rospy.loginfo(place_pose)
+        Manipulation.print_partition()
+        # input()
         self.pick_up_part(pickup_pose)
-        self.place_part(place_pose)
+        # self.place_part(place_pose)
 
         return True
 

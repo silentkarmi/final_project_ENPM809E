@@ -12,7 +12,6 @@ import tf2_ros
 import rosnode
 from enpm809e_msgs.msg import PartInfo, PartInfos
 
-
 class Navigation(object):
     """
     A controller class to drive a mobile base in Gazebo.
@@ -72,7 +71,7 @@ class Navigation(object):
         rospy.loginfo("="*21)
         
         # # self.start_aruco_detect()
-        self.movebase_client()
+        # self.movebase_client()
         
         
 
