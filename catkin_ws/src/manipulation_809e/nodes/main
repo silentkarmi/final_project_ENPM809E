@@ -8,4 +8,5 @@ import rospy
 if __name__ == '__main__':
     manipulation = manipulation_class.Manipulation(ns='/ariac/kitting')
     manipulation.main()
+    rospy.loginfo("I am here")
     # manipulation.test_arm_base()
