@@ -20,6 +20,11 @@ class Navigation(object):
 
     def __init__(self, rate=10):
         rospy.init_node('navigation_809e', anonymous=False)
+        
+        rospy.loginfo("="*21)
+        rospy.loginfo("Navigation Node for Turtlebot activated...")
+        rospy.loginfo("="*21)
+        
         rospy.loginfo('Press Ctrl c to exit')
         rospy.Subscriber("/fiducial_transforms",
                          FiducialTransformArray, self.fiducial_transforms_cb)
@@ -36,9 +41,40 @@ class Navigation(object):
         rospy.loginfo("Connected to move base server")
         rospy.loginfo("Starting goals achievements ...")
         
+        # ToDo Pradnya: Remove this Example Code after implemenation of the part message from aruco markers
+        part1_info_msg = PartInfo()
+        part1_info_msg.bin = "bin4"
+        part1_info_msg.color = "red"
+        part1_info_msg.pose_in_bin = Pose()
+        part1_info_msg.pose_in_bin.position.x = 0.0
+        part1_info_msg.pose_in_bin.position.y = 0.0
+        part1_info_msg.pose_in_bin.position.z = 0.77
         
-        # self.start_aruco_detect()
+        part2_info_msg = PartInfo()
+        part2_info_msg.bin = "bin3"
+        part2_info_msg.color = "green"
+        part2_info_msg.pose_in_bin = Pose()
+        part2_info_msg.pose_in_bin.position.x = 0.15
+        part2_info_msg.pose_in_bin.position.y = -0.1
+        part2_info_msg.pose_in_bin.position.z = 0.77
+        
+        part_infos_msg = PartInfos()
+        part_info_list = [part1_info_msg, part2_info_msg]
+        part_infos_msg.part_infos = part_info_list
+        
+        rospy.sleep(10)
+        
+        self._part_infos_pub.publish(part_infos_msg)
+        
+    
+        rospy.loginfo("="*21)
+        rospy.loginfo("Part Info Published...")
+        rospy.loginfo("="*21)
+        
+        # # self.start_aruco_detect()
         self.movebase_client()
+        
+        
 
     def get_transform(self, source, target):
         tf_buffer = tf2_ros.Buffer(rospy.Duration(3.0))

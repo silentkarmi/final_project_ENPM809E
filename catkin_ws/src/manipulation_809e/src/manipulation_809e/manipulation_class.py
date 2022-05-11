@@ -27,6 +27,10 @@ class Manipulation(object):
 
         mc.roscpp_initialize(sys.argv)
         rospy.init_node(node_name, anonymous=True)
+        
+        rospy.loginfo("="*21)
+        rospy.loginfo("Manipulation Node for kitting arm activated...")
+        rospy.loginfo("="*21)
 
         # kitting_arm
         # - linear_arm_actuator_joint
@@ -67,13 +71,14 @@ class Manipulation(object):
         """
         Main function to start the Node core
         """
+
         #
 
         # forward kinematics through joint values publisher
-        self.publish_joint_values()
+        # self.publish_joint_values()
 
         # forward kinematics with MoveIt
-        # self.goto_preset_location("test")
+        self.goto_preset_location("test")
 
         # inverse kinematics with MoveIt
         # self.reach_goal()

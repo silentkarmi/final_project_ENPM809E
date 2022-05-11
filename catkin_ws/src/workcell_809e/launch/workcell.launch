@@ -102,7 +102,7 @@
     <arg name="node_manipulation_delay" default="2.0" />
     <node name="manipulation_809e" pkg="manipulation_809e" type="main" output="screen" />
 
-    <arg name="node_navigation_delay" default="2.0" />
+    <arg name="node_navigation_delay" default="2.0" /> 
     <node name="navigation_809e" pkg="navigation_809e" type="main" output="screen" launch-prefix="bash -c 'sleep $(arg node_navigation_delay); $0 $@' " />
     
     </launch>
