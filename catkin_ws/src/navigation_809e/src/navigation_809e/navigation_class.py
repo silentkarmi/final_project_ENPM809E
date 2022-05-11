@@ -71,7 +71,7 @@ class Navigation(object):
         rospy.loginfo("="*21)
         
         # # self.start_aruco_detect()
-        # self.movebase_client()
+        self.movebase_client()
         
         
 
@@ -104,28 +104,38 @@ class Navigation(object):
 
     def movebase_client(self):
         goal = MoveBaseGoal()
-        goal.target_pose.header.frame_id = "map"
-        goal.target_pose.header.stamp = rospy.Time.now()
-        goal.target_pose.pose.position.x = -4.18
-        goal.target_pose.pose.position.y = 4.26
-        goal.target_pose.pose.orientation.x = 0
-        goal.target_pose.pose.orientation.y = 0
-        goal.target_pose.pose.orientation.z = 0.17
-        goal.target_pose.pose.orientation.w = 0.98
+        # if rospy.has_param('/aruco_lookup_locations/target_1/position_x'):
+        #     maybe= rospy.get_param('/aruco_lookup_locations/target_1/position_x')
+        #     rospy.loginfo('--------------')
+        #     rospy.loginfo(maybe)
+        #     rospy.loginfo('--------------')
+        # else:
+        #     rospy.loginfo('Parameter does not exist!!!!!')
 
-        self.client.send_goal(goal,
-                              self.done_cb,
-                              self.active_cb,
-                              self.feedback_cb)
-
-        rospy.spin()
+        for i in range(1,4):
+            goal.target_pose.header.frame_id = "map"
+            goal.target_pose.header.stamp = rospy.Time.now()
+            goal.target_pose.pose.position.x = rospy.get_param('/aruco_lookup_locations/target_'+str(i)+'/position_x')
+            goal.target_pose.pose.position.y = rospy.get_param('/aruco_lookup_locations/target_'+str(i)+'/position_y')
+            goal.target_pose.pose.orientation.x = rospy.get_param('/aruco_lookup_locations/target_'+str(i)+'/orientation_x')
+            goal.target_pose.pose.orientation.y = rospy.get_param('/aruco_lookup_locations/target_'+str(i)+'/orientation_y')
+            goal.target_pose.pose.orientation.z = rospy.get_param('/aruco_lookup_locations/target_'+str(i)+'/orientation_z')
+            goal.target_pose.pose.orientation.w = rospy.get_param('/aruco_lookup_locations/target_'+str(i)+'/orientation_w')
+            self.client.send_goal(goal,
+                                self.done_cb,
+                                self.active_cb,
+                                self.feedback_cb)
+            rospy.loginfo('Target done')
+            rospy.loginfo(i)
+            rospy.spin()
 
     def active_cb(self):
         rospy.loginfo(
             "Goal pose is now being processed by the Action Server...")
 
-    def feedback_cb(self, feedback):
-        rospy.loginfo("Moving towards target 1")
+    def feedback_cb(self,feedback):
+        rospy.loginfo('Getting feedback')
+    
 
     def done_cb(self, status, result):
         """
@@ -138,8 +148,13 @@ class Navigation(object):
         Returns:
             str: Result from the Action Server
         """
+            
         if status == 3:
             rospy.loginfo("Goal pose reached")
+
+
             # rosnode.kill_nodes(["aruco_detect"])
             
             # write code to send the robot to the next target
+
+
