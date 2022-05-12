@@ -451,16 +451,16 @@ class Manipulation(object):
         self.activate_gripper()
 
         # slowly move down until the part is attached to the gripper
-        part_is_attached = self.is_object_attached()
-        while not part_is_attached:
-            rospy.sleep(0.3)
+        while not self.is_object_attached():
             pickup_pose = copy.deepcopy(self._arm_group.get_current_pose())
             pickup_pose.pose.position.z -= 0.001
             # self._arm_group.set_pose_target(pickup_pose)
             plan, _ = self._arm_group.compute_cartesian_path(
                 [pickup_pose.pose], 0.001, 0.0)
             self._arm_group.execute(plan, wait=True)
-            part_is_attached = self.is_object_attached()
+            self._arm_group.stop()
+            self._arm_group.clear_pose_targets()
+            rospy.sleep(0.3)
             
 
         # once the part is attached, lift the gripper
@@ -548,6 +548,8 @@ class Manipulation(object):
         (plan, fraction) = self._arm_group.compute_cartesian_path(
             waypoints, 0.01, 0.0)
         self._arm_group.execute(plan, wait=True)
+        self._arm_group.stop()
+        self._arm_group.clear_pose_targets()
 
     def go_home(self):
         """
