@@ -2,8 +2,8 @@
 Final project package for ENPM809E Spring
 
 ## Install Instructions
-- `cd ~/catkin_ws/src`
-- `git clone`
+- `git clone https://github.com/silentkarmi/final_project_ENPM809E`
+- `cd ~/catkin_ws`
 - Edit your `.bashrc` and add:
   - `export GAZEBO_MODEL_PATH=/absolute/path/to/pickandplace_spring2022/workcell_809e/models:$GAZEBO_MODEL_PATH`
   - `alias kittingrqt='rosrun rqt_joint_trajectory_controller rqt_joint_trajectory_controller robot_description:=/ariac/kitting/robot_description'`
