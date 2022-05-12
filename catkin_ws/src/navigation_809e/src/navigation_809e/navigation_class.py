@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import rosnode
 import rospy
@@ -24,8 +24,10 @@ class Navigation(object):
         rospy.loginfo("="*21)
         
         rospy.loginfo('Press Ctrl c to exit')
-        rospy.Subscriber("/fiducial_transforms",
-                         FiducialTransformArray, self.fiducial_transforms_cb)
+        
+        self.fiducial_sub = rospy.Subscriber("/fiducial_transforms", FiducialTransformArray, self.fiducial_tranform_detected_cb)
+        self.fiducial_sub_unregistered = False
+      
         self._part_infos_pub = rospy.Publisher(
             '/part_info', PartInfos, queue_size=10, latch=True)
 
@@ -45,6 +47,11 @@ class Navigation(object):
         
         
     def publish_part_info_data(self):
+        """This Published the part info message containing
+           information of two orders from two aruco markers.
+           The data is sent only once, because the manipulation
+           node only need the data once.
+        """
         
         if not Navigation.DATA_PUBLISHED:
             Navigation.DATA_PUBLISHED = True
@@ -62,6 +69,7 @@ class Navigation(object):
             
             rospy.loginfo("PARTINFO DATA PUBLISHED")
             
+            # kills aruco detect
             rosnode.kill_nodes(["aruco_detect"])
         
     def get_transform(self, source, target):
@@ -87,11 +95,16 @@ class Navigation(object):
         pose.position = transform_stamped.transform.translation
         pose.orientation = transform_stamped.transform.rotation
         return pose
-
-    def fiducial_transforms_cb(self, msg):
-        pass
-    
+   
     def get_goal_for_target(self, i):
+        """This gives the MoveBaseGoal object for the movebase client
+
+        Args:
+            i (int): The Target Id i.e. 1, 2 and 3
+
+        Returns:
+            MoveBaseGoal: the MoveBaseGoal object for its corresponding target id
+        """
         goal = MoveBaseGoal()
         goal.target_pose.header.frame_id = "map"
         goal.target_pose.header.stamp = rospy.Time.now()
@@ -105,6 +118,8 @@ class Navigation(object):
         
 
     def movebase_client(self):
+        """Starts the movebase client for target 1
+        """
         goal = self.get_goal_for_target(1)
     
         self.client.send_goal(goal,
@@ -112,31 +127,36 @@ class Navigation(object):
                             self.active_cb,
                             self.feedback_cb)
         
-        rospy.Subscriber("/fiducial_transforms", FiducialTransformArray, self.fiducial_tranform_detected_cb)
         rospy.spin()
 
     def fiducial_tranform_detected_cb(self, data):
-        if data.transforms:
-            fiducial_id = str(data.transforms[0].fiducial_id)
-            part_info_msg = PartInfo()
-            part_info_msg.bin = rospy.get_param("/kits/aruco_"+ fiducial_id +"/bin")
-            part_info_msg.color = rospy.get_param("/kits/aruco_"+ fiducial_id +"/part/color")
-            part_info_msg.pose_in_bin = Pose()
-            part_info_msg.pose_in_bin.position.x = rospy.get_param("/kits/aruco_"+ fiducial_id +"/part/location/position_x")
-            part_info_msg.pose_in_bin.position.y = rospy.get_param("/kits/aruco_"+ fiducial_id +"/part/location/position_y")
-            part_info_msg.pose_in_bin.position.z = rospy.get_param("/kits/aruco_"+ fiducial_id +"/part/location/position_z")
-            self.part_info_dic.update({fiducial_id:part_info_msg})
-            # rospy.loginfo(self.part_info_dic)
-            # rospy.loginfo(fiducial_id + " detected")
-            if len(self.part_info_dic) == 2:
-                self.publish_part_info_data()
+        """The callback function for topic /fiducial_transforms
+
+        Args:
+            data (FiducialTransformArray): The data received from topic /fiducial_transforms 
+        """
+        if not self.fiducial_sub_unregistered:
+            if data.transforms:
+                fiducial_id = str(data.transforms[0].fiducial_id)
+                part_info_msg = PartInfo()
+                part_info_msg.bin = rospy.get_param("/kits/aruco_"+ fiducial_id +"/bin")
+                part_info_msg.color = rospy.get_param("/kits/aruco_"+ fiducial_id +"/part/color")
+                part_info_msg.pose_in_bin = Pose()
+                part_info_msg.pose_in_bin.position.x = rospy.get_param("/kits/aruco_"+ fiducial_id +"/part/location/position_x")
+                part_info_msg.pose_in_bin.position.y = rospy.get_param("/kits/aruco_"+ fiducial_id +"/part/location/position_y")
+                part_info_msg.pose_in_bin.position.z = rospy.get_param("/kits/aruco_"+ fiducial_id +"/part/location/position_z")
+                self.part_info_dic.update({fiducial_id:part_info_msg})
+                if len(self.part_info_dic) == 2:
+                    self.publish_part_info_data()
+                    
+                    # unsuscribe from fiducial detected callbacks we dont need it anymore
+                    self.fiducial_sub.unregister()
+                    self.fiducial_sub_unregistered = True
         
     def active_cb(self):
-        # rospy.loginfo("Goal pose is now being processed by the Action Server...")
         pass
 
     def feedback_cb(self,feedback):
-        # rospy.loginfo('Getting feedback')
         pass
     
 
@@ -180,6 +200,16 @@ class Navigation(object):
                             self.feedback_cb)
             
     def done_cb3(self, status, result):
+        """Callback when its reached target 3,
+           We do nothing, when we reach goal point
+
+        Args:
+            status (int): status of the execution
+            result (str): Resut from the Action Server
+
+        Returns:
+            str: Result from the Action Server
+        """
         pass
         
 

@@ -2,8 +2,6 @@
 
 # ros
 from manipulation_809e import manipulation_class
-import rospy
-
 
 if __name__ == '__main__':
     manipulation = manipulation_class.Manipulation(ns='/ariac/kitting')

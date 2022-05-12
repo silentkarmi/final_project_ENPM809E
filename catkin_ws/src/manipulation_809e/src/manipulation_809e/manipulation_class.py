@@ -1,9 +1,11 @@
+#!/usr/bin/env python3
+
 # python
 import sys
 import copy
 # ros
 import rospy
-from tf.transformations import euler_from_quaternion, quaternion_from_euler
+
 import tf2_ros
 import tf2_msgs.msg 
 import geometry_msgs.msg 
@@ -12,13 +14,12 @@ from enpm809e_msgs.srv import VacuumGripperControl
 from enpm809e_msgs.msg import VacuumGripperState, LogicalCameraImage, PartInfos
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 
-
-
 # moveit
 import moveit_commander as mc
 
 class Part:
-    """part in the workcell is stored in world frame
+    """Part in the workcell is stored in world frame
+       So, we can directly pick up the place from the pose
     """
     def __init__(self, color, pose):
         self.color = color
@@ -32,12 +33,18 @@ class Part:
         
 class Order:
     """order for the kitting arm to complete
+       Each order reprensent the part with it color,
+       and it should be moved to where in what bin
+       The pose is in world frame. So, we can just use the pose
+       to place the part at the pose
     """
    
     def __init__(self, product):
         self.color = product.color
         self.bin = product.bin
         
+        # before storing the product pose, we convert
+        # the given pose to world frame and then store it
         trans = TF_TRANSFORM.get_world_transform_for_order(product)
         self.pose = Pose()
         self.pose.position.x = trans.translation.x
@@ -68,6 +75,14 @@ class TF_TRANSFORM:
         TF_TRANSFORM.listener = tf2_ros.TransformListener(TF_TRANSFORM.tfBuffer)
         
     def get_world_transform_for_order(product):
+        """Gets the world tranformation of the product to be moved to where
+
+        Args:
+            product (Order): Each order reprensent the part color to be moved to where
+
+        Returns:
+            Transformation: This object contains the transformed Translation and Rotation in world frame
+        """
         pub_tf = rospy.Publisher("/tf", tf2_msgs.msg.TFMessage, queue_size=1) 
         
         for i in range(3):
@@ -96,8 +111,7 @@ class TF_TRANSFORM:
                                                        rospy.Time.now() - rospy.Time(3),
                                                        rospy.Duration(2.0))
         
-        return trans.transform    
-
+        return trans.transform
 
 class Manipulation(object):
 
@@ -144,28 +158,26 @@ class Manipulation(object):
         moveit_group = mc.MoveGroupCommander(
             'kitting_arm', robot_description=ns + '/' + robot_description, ns=ns)
         
-        
-        rospy.sleep(2)
-        
-        len = 0.6
-        width = 0.6
-        height = 0.68
-        
         self.groups = {}
         self.groups['kitting_arm'] = moveit_group
         self._arm_group = self.groups['kitting_arm']
-        # self._arm_group.set_goal_orientation_tolerance = 0.1
-        # self._arm_group.set_goal_position_tolerance = 0.1
     
     @staticmethod
     def print_msg(msg):
+        """prints the message hightlighting in the terminal
+
+        Args:
+            msg (str): message to be printed
+        """
         Manipulation.print_partition()
         rospy.loginfo(msg)
         Manipulation.print_partition()
         
     @staticmethod
     def print_partition():
-        rospy.loginfo("="*21)
+        """prints a partition containing "="
+        """
+        rospy.loginfo("="*31)
         
     def main(self):
         """
@@ -180,16 +192,24 @@ class Manipulation(object):
             self.get_parts_in_workcell()
             part = self.find_part(order.color)
             self.move_part(part.pose, order.pose)
-    
 
     def execute_move(self):
+        """Just a general execute of sequence of steps for moving the arm group
+        """
         self._arm_group.go(wait=True)
         self._arm_group.stop()
-        # It is always good to clear your targets after planning with poses.
-        # Note: there is no equivalent function for clear_joint_value_targets()
         self._arm_group.clear_pose_targets()
 
     def find_part(self, part_color):
+        """finds the part color in the workcell
+
+        Args:
+            part_color (str): color of the part
+
+        Returns:
+            Part: returns the necessary part of the 
+            same color from the workcell
+        """
         for part in self.parts_in_workcell:
             if part.color == part_color:
                 break
@@ -197,12 +217,21 @@ class Manipulation(object):
         return part
         
     def get_parts_in_workcell(self):
+        """Generates a list of parts which logical camera see
+           all parts are stored with their global world pose
+        """
         self.parts_in_workcell = []
         red_id = 0
         green_id = 0
         blue_id = 0
         
         def get_parts_in_camera(camera_id):
+            """inner function of get_parts_in_workcell, 
+               because it is executed twice for two cameras
+
+            Args:
+                camera_id (int): camera id of the logical camera
+            """
             nonlocal red_id
             nonlocal green_id
             nonlocal blue_id
@@ -243,7 +272,7 @@ class Manipulation(object):
         get_parts_in_camera(2)
 
     def get_orders(self, msg):
-        """process order received from manipulation node
+        """process order received from navigation node
 
         Args:
             msg (PartInfos): PartInfos message type
@@ -252,7 +281,6 @@ class Manipulation(object):
         
         for product in msg.part_infos:
             self.orders.append(Order(product))
-        
         
     def reach_goal(self):
         """
@@ -356,6 +384,8 @@ class Manipulation(object):
         # arm_joints = [x, 0, -0.75, 2.12, -3.04, -1.51, 0]
         arm_joints = [x, 0, -1.25, 1.74, -2.66, -1.51, 0]
         self._arm_group.go(arm_joints, wait=True)
+        self._arm_group.stop()
+        self._arm_group.clear_pose_targets()
 
     def pickandplace(self):
         """
@@ -384,7 +414,6 @@ class Manipulation(object):
         self.move_arm_base(-2)
         rospy.sleep(3.0)
         self.move_arm_base(-3)
-
 
     def pick_up_part(self, pickup_pose):
         """
@@ -415,10 +444,6 @@ class Manipulation(object):
         above_part_pose = Pose()
         above_part_pose.position = gripper_position
         above_part_pose.orientation = flat_gripper
-
-        # send the gripper to the pose using moveit
-        # self._arm_group.set_pose_target(above_part_pose)
-        # self.execute_move()
 
         self.cartesian_move([above_part_pose])
 
@@ -470,8 +495,6 @@ class Manipulation(object):
         above_bin_pose = Pose()
         above_bin_pose.position = gripper_position
         above_bin_pose.orientation = flat_gripper
-        # self._arm_group.set_pose_target(above_bin_pose)
-        # self._arm_group.go()
         self.cartesian_move([above_bin_pose])
 
         # get the pose of the gripper and make it move a bit lower
@@ -508,7 +531,7 @@ class Manipulation(object):
         rospy.loginfo(pickup_pose)
         rospy.loginfo(place_pose)
         Manipulation.print_partition()
-        # input()
+
         self.pick_up_part(pickup_pose)
         self.place_part(place_pose)
 
