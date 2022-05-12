@@ -1,1 +1,9 @@
-Place instructions on how to run your Nodes.
+Instructions to run GROUP 2 code:
+----------------------------------
+1. Unzip the code final_project_group2.zip
+2. mkdir -p catkin_ws/src
+3. Put the contents of the unzipped folder inside src
+4. run the following commands in a single terminal
+5. run $ catkin build
+6. run $ source <workspace>/devel/setup.bash
+7. run $ roslaunch workcell_809e workcell.launch
