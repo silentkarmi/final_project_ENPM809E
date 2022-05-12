@@ -1,15 +1,11 @@
 #!/usr/bin/env python
 
-from pandas import NA
 import rosnode
 import rospy
-import sys
-import tf
 import actionlib
 from move_base_msgs.msg import MoveBaseAction, MoveBaseGoal
 from geometry_msgs.msg import Pose, TransformStamped
 from fiducial_msgs.msg import FiducialTransformArray
-import copy
 import tf2_ros
 import rosnode
 from enpm809e_msgs.msg import PartInfo, PartInfos
