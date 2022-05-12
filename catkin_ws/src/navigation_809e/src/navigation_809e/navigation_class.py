@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+from pandas import NA
+import rosnode
 import rospy
 import sys
 import tf
@@ -16,6 +18,7 @@ class Navigation(object):
     """
     A controller class to drive a mobile base in Gazebo.
     """
+    DATA_PUBLISHED = False
 
     def __init__(self, rate=10):
         rospy.init_node('navigation_809e', anonymous=False)
@@ -40,41 +43,31 @@ class Navigation(object):
         rospy.loginfo("Connected to move base server")
         rospy.loginfo("Starting goals achievements ...")
         
-        # ToDo Pradnya: Remove this Example Code after implemenation of the part message from aruco markers
-        part1_info_msg = PartInfo()
-        part1_info_msg.bin = "bin4"
-        part1_info_msg.color = "red"
-        part1_info_msg.pose_in_bin = Pose()
-        part1_info_msg.pose_in_bin.position.x = 0.0
-        part1_info_msg.pose_in_bin.position.y = 0.0
-        part1_info_msg.pose_in_bin.position.z = 0.77
+        self.part_info_dic = {}
         
-        part2_info_msg = PartInfo()
-        part2_info_msg.bin = "bin3"
-        part2_info_msg.color = "green"
-        part2_info_msg.pose_in_bin = Pose()
-        part2_info_msg.pose_in_bin.position.x = 0.15
-        part2_info_msg.pose_in_bin.position.y = -0.1
-        part2_info_msg.pose_in_bin.position.z = 0.77
-        
-        part_infos_msg = PartInfos()
-        part_info_list = [part1_info_msg, part2_info_msg]
-        part_infos_msg.part_infos = part_info_list
-        
-        rospy.sleep(10)
-        
-        self._part_infos_pub.publish(part_infos_msg)
-        
-    
-        rospy.loginfo("="*21)
-        rospy.loginfo("Part Info Published...")
-        rospy.loginfo("="*21)
-        
-        # # self.start_aruco_detect()
         self.movebase_client()
         
         
-
+    def publish_part_info_data(self):
+        
+        if not Navigation.DATA_PUBLISHED:
+            Navigation.DATA_PUBLISHED = True
+            
+            part_infos_msg = PartInfos()
+            part_info_list = []
+            
+            for part_info in self.part_info_dic.values():
+                part_info_list.append(part_info)
+            
+            part_infos_msg.part_infos = part_info_list
+            rospy.loginfo(part_info_list)
+            
+            self._part_infos_pub.publish(part_infos_msg)
+            
+            rospy.loginfo("PARTINFO DATA PUBLISHED")
+            
+            rosnode.kill_nodes(["aruco_detect"])
+        
     def get_transform(self, source, target):
         tf_buffer = tf2_ros.Buffer(rospy.Duration(3.0))
         tf2_ros.TransformListener(tf_buffer)
@@ -101,40 +94,54 @@ class Navigation(object):
 
     def fiducial_transforms_cb(self, msg):
         pass
+    
+    def get_goal_for_target(self, i):
+        goal = MoveBaseGoal()
+        goal.target_pose.header.frame_id = "map"
+        goal.target_pose.header.stamp = rospy.Time.now()
+        goal.target_pose.pose.position.x = rospy.get_param('/aruco_lookup_locations/target_'+str(i)+'/position_x')
+        goal.target_pose.pose.position.y = rospy.get_param('/aruco_lookup_locations/target_'+str(i)+'/position_y')
+        goal.target_pose.pose.orientation.x = rospy.get_param('/aruco_lookup_locations/target_'+str(i)+'/orientation_x')
+        goal.target_pose.pose.orientation.y = rospy.get_param('/aruco_lookup_locations/target_'+str(i)+'/orientation_y')
+        goal.target_pose.pose.orientation.z = rospy.get_param('/aruco_lookup_locations/target_'+str(i)+'/orientation_z')
+        goal.target_pose.pose.orientation.w = rospy.get_param('/aruco_lookup_locations/target_'+str(i)+'/orientation_w')
+        return goal
+        
 
     def movebase_client(self):
-        goal = MoveBaseGoal()
-        # if rospy.has_param('/aruco_lookup_locations/target_1/position_x'):
-        #     maybe= rospy.get_param('/aruco_lookup_locations/target_1/position_x')
-        #     rospy.loginfo('--------------')
-        #     rospy.loginfo(maybe)
-        #     rospy.loginfo('--------------')
-        # else:
-        #     rospy.loginfo('Parameter does not exist!!!!!')
+        goal = self.get_goal_for_target(1)
+    
+        self.client.send_goal(goal,
+                            self.done_cb,
+                            self.active_cb,
+                            self.feedback_cb)
+        
+        rospy.Subscriber("/fiducial_transforms", FiducialTransformArray, self.fiducial_tranform_detected_cb)
+        rospy.spin()
 
-        for i in range(1,4):
-            goal.target_pose.header.frame_id = "map"
-            goal.target_pose.header.stamp = rospy.Time.now()
-            goal.target_pose.pose.position.x = rospy.get_param('/aruco_lookup_locations/target_'+str(i)+'/position_x')
-            goal.target_pose.pose.position.y = rospy.get_param('/aruco_lookup_locations/target_'+str(i)+'/position_y')
-            goal.target_pose.pose.orientation.x = rospy.get_param('/aruco_lookup_locations/target_'+str(i)+'/orientation_x')
-            goal.target_pose.pose.orientation.y = rospy.get_param('/aruco_lookup_locations/target_'+str(i)+'/orientation_y')
-            goal.target_pose.pose.orientation.z = rospy.get_param('/aruco_lookup_locations/target_'+str(i)+'/orientation_z')
-            goal.target_pose.pose.orientation.w = rospy.get_param('/aruco_lookup_locations/target_'+str(i)+'/orientation_w')
-            self.client.send_goal(goal,
-                                self.done_cb,
-                                self.active_cb,
-                                self.feedback_cb)
-            rospy.loginfo('Target done')
-            rospy.loginfo(i)
-            rospy.spin()
-
+    def fiducial_tranform_detected_cb(self, data):
+        if data.transforms:
+            fiducial_id = str(data.transforms[0].fiducial_id)
+            part_info_msg = PartInfo()
+            part_info_msg.bin = rospy.get_param("/kits/aruco_"+ fiducial_id +"/bin")
+            part_info_msg.color = rospy.get_param("/kits/aruco_"+ fiducial_id +"/part/color")
+            part_info_msg.pose_in_bin = Pose()
+            part_info_msg.pose_in_bin.position.x = rospy.get_param("/kits/aruco_"+ fiducial_id +"/part/location/position_x")
+            part_info_msg.pose_in_bin.position.y = rospy.get_param("/kits/aruco_"+ fiducial_id +"/part/location/position_y")
+            part_info_msg.pose_in_bin.position.z = rospy.get_param("/kits/aruco_"+ fiducial_id +"/part/location/position_z")
+            self.part_info_dic.update({fiducial_id:part_info_msg})
+            # rospy.loginfo(self.part_info_dic)
+            # rospy.loginfo(fiducial_id + " detected")
+            if len(self.part_info_dic) == 2:
+                self.publish_part_info_data()
+        
     def active_cb(self):
-        rospy.loginfo(
-            "Goal pose is now being processed by the Action Server...")
+        # rospy.loginfo("Goal pose is now being processed by the Action Server...")
+        pass
 
     def feedback_cb(self,feedback):
-        rospy.loginfo('Getting feedback')
+        # rospy.loginfo('Getting feedback')
+        pass
     
 
     def done_cb(self, status, result):
@@ -150,11 +157,33 @@ class Navigation(object):
         """
             
         if status == 3:
-            rospy.loginfo("Goal pose reached")
+            goal = self.get_goal_for_target(2)
+            self.client.send_goal(goal,
+                            self.done_cb2,
+                            self.active_cb,
+                            self.feedback_cb)
 
+    def done_cb2(self, status, result):
+        """
+        Callback when movebase has reached the target 2
 
-            # rosnode.kill_nodes(["aruco_detect"])
+        Args:
+            status (int): status of the execution
+            result (str): Resut from the Action Server
+
+        Returns:
+            str: Result from the Action Server
+        """
             
-            # write code to send the robot to the next target
-
+        if status == 3:
+            rospy.loginfo("Goal pose reached")
+            goal = self.get_goal_for_target(3)
+            self.client.send_goal(goal,
+                            self.done_cb3,
+                            self.active_cb,
+                            self.feedback_cb)
+            
+    def done_cb3(self, status, result):
+        pass
+        
 

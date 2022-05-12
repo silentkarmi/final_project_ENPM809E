@@ -23,7 +23,7 @@ aruco_lookup_locations:
 
 kits:
   aruco_0: 
-    bin: bin3
+    bin: bin1
     part:
       color: red
       location: 
@@ -31,7 +31,7 @@ kits:
         position_y: 0
         position_z: 0.77  
   aruco_1: 
-    bin: bin2
+    bin: bin1
     part:
       color: green
       location: 
@@ -39,17 +39,17 @@ kits:
         position_y: -0.1
         position_z: 0.77  
   aruco_2: 
-    bin: bin4
+    bin: bin2
     part:
-      color: red
+      color: blue
       location: 
         position_x: 0
         position_y: 0
         position_z: 0.77  
   aruco_3: 
-    bin: bin4
+    bin: bin3
     part:
-      color: red
+      color: blue
       location: 
         position_x: 0
         position_y: 0

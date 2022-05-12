@@ -25,6 +25,7 @@ class Part:
         self.pose = pose
         
         Manipulation.print_partition()
+        rospy.loginfo("PART IN WORKCELL")
         rospy.loginfo(self.color)
         rospy.loginfo(self.pose)
         Manipulation.print_partition()
@@ -46,6 +47,7 @@ class Order:
         self.pose.orientation = trans.rotation
         
         Manipulation.print_partition()
+        rospy.loginfo("ORDER")
         rospy.loginfo(self.color)
         rospy.loginfo(self.pose)
         Manipulation.print_partition()
@@ -154,38 +156,6 @@ class Manipulation(object):
         self._arm_group = self.groups['kitting_arm']
         # self._arm_group.set_goal_orientation_tolerance = 0.1
         # self._arm_group.set_goal_position_tolerance = 0.1
-        
-        # p = geometry_msgs.msg.PoseStamped()
-        # p.header.frame_id = self.robot.get_planning_frame()
-        # p.pose.position.x = 0
-        # p.pose.position.y = 0
-        # p.pose.position.z = height / 2
-        # self.scene.add_box("bin1", p, (len, width, height))
-
-        # p = geometry_msgs.msg.PoseStamped()
-        # p.header.frame_id = self.robot.get_planning_frame()
-        # p.pose.position.x = -1
-        # p.pose.position.y = 0
-        # p.pose.position.z = height / 2
-        # self.scene.add_box("bin2", p, (len, width, height))
-        
-        # p = geometry_msgs.msg.PoseStamped()
-        # p.header.frame_id = self.robot.get_planning_frame()
-        # p.pose.position.x = -2
-        # p.pose.position.y = 0
-        # p.pose.position.z = height / 2
-        # self.scene.add_box("bin3", p, (len, width, height))
-        
-        # p = geometry_msgs.msg.PoseStamped()
-        # p.header.frame_id = self.robot.get_planning_frame()
-        # p.pose.position.x = -3
-        # p.pose.position.y = 0
-        # p.pose.position.z = height / 2
-        # self.scene.add_box("bin4", p, (len, width, height))
-
-        # rospy.logerr(self.groups['kitting_arm'].get_current_pose())
-        # ee_link
-        # rospy.logerr(self.groups['kitting_arm'].get_end_effector_link())
     
     @staticmethod
     def print_msg(msg):
@@ -204,15 +174,12 @@ class Manipulation(object):
 
         msg = rospy.wait_for_message("/part_info", PartInfos)
         self.get_orders(msg)
-        self.get_parts_in_workcell()
-        
+                
         for order in self.orders:
             rospy.sleep(1)
+            self.get_parts_in_workcell()
             part = self.find_part(order.color)
             self.move_part(part.pose, order.pose)
-            
-        # self.pickandplace()
-        # self.go_home()
     
 
     def execute_move(self):
