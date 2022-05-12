@@ -1,6 +1,6 @@
 Instructions to run GROUP 2 code:
 ----------------------------------
-1. Unzip the code final_project_group2.zip
+1. Unzip the code pickandplace_spring2022_group2.zip
 2. mkdir -p catkin_ws/src
 3. Put the contents of the unzipped folder inside src
 4. run the following commands in a single terminal
